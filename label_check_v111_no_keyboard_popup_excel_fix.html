@@ -1,0 +1,275 @@
+<!doctype html><html lang='zh-Hant'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>V11.1 掃碼與匯入EXCEL都不跳鍵盤版</title><script src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'></script><script src='https://unpkg.com/@zxing/library@latest'></script><style>
+body{margin:0;background:#0f172a;color:#fff;font-family:Arial}.wrap{max-width:980px;margin:auto;padding:10px}.panel{background:#1e293b;border-radius:16px;padding:12px;margin-top:12px}.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}@media(max-width:800px){.row{grid-template-columns:1fr}}label{display:block;font-weight:700;font-size:14px;margin-bottom:6px}input,select,button{font:inherit}input,select{width:100%;padding:14px;border:none;border-radius:12px}button{padding:14px 10px;border:none;border-radius:14px;background:#2563eb;color:#fff;font-weight:700}button.g{background:#475569}.small{font-size:12px;color:#cbd5e1;line-height:1.6}.status{padding:14px;border-radius:14px;margin-top:12px;font-weight:700;white-space:pre-wrap}.ok{background:#16a34a}.ng{background:#dc2626}.warn{background:#ca8a04}.camera{position:relative}video,canvas{display:block;width:100%;max-height:48vh;background:#000;border-radius:14px}.red{position:absolute;left:8%;right:8%;top:50%;height:4px;background:#ef4444;transform:translateY(-50%);pointer-events:none}.green{position:absolute;left:18%;right:18%;top:25%;height:8%;border:3px solid #22c55e;border-radius:10px;pointer-events:none}.gl{position:absolute;left:18%;top:calc(25% - 24px);background:rgba(0,0,0,.7);padding:2px 8px;border-radius:999px;font-size:12px}.btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}.big{font-size:42px;font-weight:900;text-align:center;border-radius:18px;padding:18px}.bigok{background:rgba(22,163,74,.18);color:#4ade80}.bigng{background:rgba(220,38,38,.18);color:#f87171}.bigidle{background:rgba(71,85,105,.25);color:#cbd5e1}.badge{display:inline-block;background:#334155;padding:3px 9px;border-radius:999px;font-size:12px}.scan-target{outline:3px solid #f59e0b;background:#fff7ed;color:#111827}table{width:100%;border-collapse:collapse;margin-top:8px;background:#111827;border-radius:12px;overflow:hidden}th,td{padding:10px 8px;border-bottom:1px solid #334155;text-align:left;font-size:14px}th{background:#1f2937}.mono{font-family:Consolas,monospace}
+</style></head><body><div class='wrap'>
+<div class='panel'><div class='small'>V11.1 掃碼與匯入EXCEL都不跳鍵盤版。保留原本相機掃條碼與色線判讀，也支援藍牙掃碼槍直接輸入條碼，並新增 Qrcode 掃描與比對功能，以及多筆比對結果累積匯出 CSV。這版修正為：品名、製造日期、有效日期、有效時間改用掃到的條碼前8碼反查主檔，不再以手動選取品名當主判斷，並新增可清除條碼、Qrcode、照片與判讀結果的按鈕；若未拍色線照片，只刷條碼或只刷Qrcode也可先進行判讀；並將條碼與Qrcode欄位改為掃碼時不跳出鍵盤，匯入 Excel 時也不跳出鍵盤。</div></div>
+<div class='panel'><div class='row'><div><label>Excel 主檔</label><input type='file' id='excelInput' accept='.xlsx,.xls' inputmode='none'></div><div><label>主檔狀態</label><div><span id='excelStatus' class='badge'>未載入</span></div><div id='excelInfo' class='small'></div></div><div><label>掃描狀態</label><div><span id='scanStatus' class='badge'>尚未掃描</span></div></div></div></div>
+<div class='panel'><div class='row'><div><label>類別</label><select id='category'></select></div><div><label>品名</label><select id='product'></select></div><div><label>配別</label><select id='delivery'><option>一配</option><option>二配</option></select></div></div></div>
+<div class='panel'><div class='camera'><video id='video' autoplay playsinline></video><canvas id='canvas'></canvas><div class='red'></div><div class='green'></div><div class='gl'>色線判斷區</div></div><div class='btns'><button id='openCam'>開啟相機</button><button id='scanCam'>掃描</button><button id='stopCam' class='g'>關閉相機</button></div><div class='small' style='margin-top:8px'>相機開不起來時，可直接用下方「選擇照片」。照片會顯示在畫面上。若使用藍牙掃碼槍，可直接掃入「條碼輸入」欄位；Qrcode 可由相機掃描或手動貼入。</div></div>
+<div class='panel'><div class='row'><div><label>選擇照片</label><input type='file' id='photoInput' accept='image/*' capture='environment'></div><div><label>條碼輸入</label><input id='barcodeInput' placeholder='13碼條碼' readonly inputmode='none' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false'></div><div><label>Qrcode輸入</label><input id='qrcodeInput' placeholder='Qrcode內容' readonly inputmode='none' autocomplete='off' autocorrect='off' autocapitalize='off' spellcheck='false'></div></div><div class='row' style='margin-top:10px'><div><label>&nbsp;</label><button id='clearScan' class='g' style='width:100%'>清除掃描資料</button></div><div></div><div><label>&nbsp;</label><button id='analyze' style='width:100%'>開始比對</button></div></div><div class='small' id='scannerHint' style='margin-top:8px'>可直接用掃碼槍掃入，不會跳出鍵盤。預設先掃條碼；若要掃 Qrcode，請先點一下 Qrcode 欄位切換目標。</div></div>
+<div id='status' class='status warn'>請先載入 Excel 主檔，再選類別、品名、配別。</div>
+<div class='panel'><div id='big' class='big bigidle'>待檢核</div></div>
+<div class='panel'><b>Excel 標準值</b><div id='expected' class='small'></div></div>
+<div class='panel'><b>比對結果</b><table><thead><tr><th>欄位</th><th>解析結果</th><th>標準</th><th>狀態</th></tr></thead><tbody id='tbody'></tbody></table></div>
+<div class='panel'><b>解析明細</b><div id='detail' class='mono small'></div></div>
+<div class='panel'><div class='row'><div><label>累積匯出</label><button id='exportCsv' class='g' style='width:100%'>匯出CSV</button></div><div><label>清空紀錄</label><button id='clearCsv' class='g' style='width:100%'>清空紀錄</button></div><div><label>累積筆數</label><div><span id='exportCount' class='badge'>0</span></div><div id='exportLast' class='small'></div></div></div></div></div><script>
+let rows=[],stream=null,lastColor=null,lastImageLoaded=false;let scannerTimer=null;let activeScanField='barcode';let scannerBuffer='';let scannerFlushTimer=null;const EXPORT_KEY='label_check_v111_camera_scanner_qr_records';
+const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function stat(t,c){const e=$('status');e.className='status '+c;e.textContent=t} function big(t,s){const e=$('big');e.textContent=t;e.className='big '+(s==='ok'?'bigok':s==='ng'?'bigng':'bigidle')}
+function fmt(d){return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')}
+function doyDate(doy){doy=parseInt(doy,10);if(!(doy>=1&&doy<=365))return'';const d=new Date(2026,0,1);d.setDate(d.getDate()+doy-1);return fmt(d)}
+function minusDays(ds,n){if(!ds||!Number.isFinite(n))return'';const p=ds.split('.').map(Number),d=new Date(p[0],p[1]-1,p[2]);d.setDate(d.getDate()-n);return fmt(d)}
+function detectColor(c){const w=c.width,h=c.height,x=Math.round(w*0.18),y=Math.round(h*0.25),cw=Math.round(w*0.64),ch=Math.max(8,Math.round(h*0.08));const t=document.createElement('canvas');t.width=cw;t.height=ch;const ctx=t.getContext('2d');ctx.drawImage(c,x,y,cw,ch,0,0,cw,ch);const img=ctx.getImageData(0,0,cw,ch).data;let r=0,g=0,b=0,n=0,oh=0,gh=0;for(let i=0;i<img.length;i+=4){let rr=img[i],gg=img[i+1],bb=img[i+2],mx=Math.max(rr,gg,bb),mn=Math.min(rr,gg,bb),sat=mx-mn;if(mx<60||sat<25)continue;r+=rr;g+=gg;b+=bb;n++;if(rr>150&&gg>80&&gg<220&&bb<120&&rr>gg)oh++;if(gg>110&&rr<170&&bb<150&&gg>rr+10)gh++}if(!n)return{name:'無法判斷',rgb:'-',orangeHits:0,greenHits:0};r=Math.round(r/n);g=Math.round(g/n);b=Math.round(b/n);let name='無法判斷';if(oh>gh&&oh>=20)name='橘線';else if(gh>oh&&gh>=20)name='綠線';else if(r>g+20&&g>b+10)name='橘線';else if(g>r+15&&g>b+10)name='綠線';return{name,rgb:`R${r} G${g} B${b}`,orangeHits:oh,greenHits:gh}}
+async function decodeCanvas(c){let v='';try{if('BarcodeDetector'in window){const d=new BarcodeDetector({formats:['code_128','ean_13','ean_8','upc_a','upc_e']});const a=await d.detect(c);if(a&&a.length)v=a[0].rawValue||''}}catch(e){}if(!v){try{const r=await new ZXing.BrowserMultiFormatReader().decodeFromCanvas(c);v=r&&r.text?r.text:''}catch(e){}}return String(v||'').replace(/\D/g,'')}
+async function decodeQrCanvas(c){let v='';try{if('BarcodeDetector'in window){const d=new BarcodeDetector({formats:['qr_code']});const a=await d.detect(c);if(a&&a.length)v=a[0].rawValue||''}}catch(e){}if(!v){try{const r=await new ZXing.BrowserMultiFormatReader().decodeFromCanvas(c);v=r&&r.text?r.text:''}catch(e){}}return String(v||'').trim()}
+function normQr(v){return String(v||'').trim().normalize('NFKC').replace(/\s+/g,'')}
+function setActiveScanField(name){
+  activeScanField = name === 'qrcode' ? 'qrcode' : 'barcode';
+  $('barcodeInput').classList.toggle('scan-target', activeScanField === 'barcode');
+  $('qrcodeInput').classList.toggle('scan-target', activeScanField === 'qrcode');
+}
+function silentFocus(el){
+  if(!el) return;
+  try{
+    el.readOnly = true;
+    el.focus({preventScroll:true});
+    setTimeout(()=>{ try{ el.blur(); }catch(e){} }, 0);
+  }catch(e){}
+}
+function dismissSoftKeyboard(){
+  try{
+    if(document.activeElement && typeof document.activeElement.blur === 'function'){
+      document.activeElement.blur();
+    }
+  }catch(e){}
+}
+function focusBarcodeInput(){setActiveScanField('barcode');dismissSoftKeyboard();}
+function updateScannerHint(text){const el=$('scannerHint');if(el)el.textContent=text}
+function clearScanData(){
+  $('barcodeInput').value='';
+  $('qrcodeInput').value='';
+  $('photoInput').value='';
+  $('scanStatus').textContent='尚未掃描';
+  $('tbody').innerHTML='';
+  $('detail').innerHTML='';
+  big('待檢核','idle');
+  stat('已清除條碼、Qrcode、照片與判讀結果。','warn');
+  lastColor=null;
+  lastImageLoaded=false;
+  try{
+    const c=$('canvas');
+    const ctx=c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);
+  }catch(e){}
+  $('canvas').style.display='none';
+  if(stream){
+    $('video').style.display='block';
+  }else{
+    $('video').style.display='none';
+  }
+  setActiveScanField('barcode');
+  updateScannerHint('已清除掃描資料，可重新掃描條碼 / Qrcode 或重新選擇照片。');
+  focusBarcodeInput();
+}
+function getExportRows(){try{return JSON.parse(localStorage.getItem(EXPORT_KEY)||'[]')}catch(e){return[]}}
+function setExportRows(rows){localStorage.setItem(EXPORT_KEY, JSON.stringify(rows))}
+function addExportRow(row){const rows=getExportRows();rows.unshift(row);setExportRows(rows);renderExportInfo()}
+function clearExportRows(){localStorage.removeItem(EXPORT_KEY);renderExportInfo()}
+function renderExportInfo(){
+  const rows=getExportRows(), countEl=$('exportCount'), lastEl=$('exportLast');
+  if(countEl) countEl.textContent=String(rows.length);
+  if(lastEl){
+    if(!rows.length) lastEl.textContent='尚未累積比對結果';
+    else lastEl.textContent='最近一筆：'+rows[0].time+'｜'+rows[0].product+'｜'+rows[0].result;
+  }
+}
+function exportCsvRows(){
+  const rows=getExportRows();
+  if(!rows.length){stat('尚未有可匯出的比對資料。','warn');return}
+  const headers=['time','category','product','delivery','barcode','qrcode','barcode_base8','barcode_doy','barcode_delivery_code','exp_date','mfg_date','actual_time','expected_time','color_name','color_rgb','orange_hits','green_hits','result'];
+  const lines=[headers.join(',')];
+  rows.forEach(r=>{
+    lines.push(headers.map(h => '"'+String(r[h]??'').replace(/"/g,'""')+'"').join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const d=new Date();
+  a.download='label_compare_records_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0')+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$('barcodeInput').addEventListener('click',()=>{setActiveScanField('barcode');silentFocus($('barcodeInput'));updateScannerHint('目前掃碼目標：條碼。可直接用藍牙掃碼槍掃入，不會跳出鍵盤。');});
+$('barcodeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('analyze').click();}});
+$('qrcodeInput').addEventListener('click',()=>{setActiveScanField('qrcode');silentFocus($('qrcodeInput'));updateScannerHint('目前掃碼目標：Qrcode。可直接用藍牙掃碼槍掃入，不會跳出鍵盤。');});
+$('qrcodeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('analyze').click();}});
+
+document.addEventListener('keydown',(e)=>{
+  if(e.ctrlKey || e.altKey || e.metaKey) return;
+  const key = e.key;
+  if(key === 'Tab') return;
+
+  if(key === 'Enter'){
+    if(scannerBuffer){
+      if(activeScanField === 'qrcode'){
+        $('qrcodeInput').value = scannerBuffer.trim();
+      }else{
+        $('barcodeInput').value = scannerBuffer.replace(/\D/g,'');
+      }
+      $('scanStatus').textContent='已掃描';
+      updateScannerHint((activeScanField === 'qrcode' ? '已收到 Qrcode，可直接按開始比對。' : '已收到條碼，可直接按開始比對。'));
+      scannerBuffer = '';
+      if(scannerFlushTimer) clearTimeout(scannerFlushTimer);
+      e.preventDefault();
+    }else{
+      e.preventDefault();
+      $('analyze').click();
+    }
+    return;
+  }
+
+  if(key.length === 1){
+    scannerBuffer += key;
+    if(scannerFlushTimer) clearTimeout(scannerFlushTimer);
+    scannerFlushTimer = setTimeout(()=>{
+      if(scannerBuffer){
+        if(activeScanField === 'qrcode'){
+          $('qrcodeInput').value = scannerBuffer.trim();
+        }else{
+          $('barcodeInput').value = scannerBuffer.replace(/\D/g,'');
+        }
+        $('scanStatus').textContent='已掃描';
+        scannerBuffer = '';
+      }
+    },120);
+    e.preventDefault();
+  }
+}, true);
+$('exportCsv').addEventListener('click',exportCsvRows);
+$('clearCsv').addEventListener('click',()=>{clearExportRows();stat('已清空累積比對紀錄。','warn')});
+$('clearScan').addEventListener('click',()=>{clearScanData();dismissSoftKeyboard();});
+renderExportInfo();
+$('excelInput').addEventListener('click',()=>{dismissSoftKeyboard();});
+$('excelInput').addEventListener('change',async e=>{
+dismissSoftKeyboard();
+const f=e.target.files[0];
+if(!f)return;
+try{
+const data=await f.arrayBuffer(),wb=XLSX.read(data,{type:'array'}),ws=wb.Sheets['商品資料'];
+if(!ws){stat('找不到工作頁「商品資料」。','ng');dismissSoftKeyboard();return}
+const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
+rows=[];
+for(let i=1;i<raw.length;i++){
+  const r=raw[i]||[],category=String(r[0]??'').trim(),product=String(r[2]??'').trim(),barcodeBase=String(r[3]??'').trim(),oneDays=parseInt(String(r[6]??'').trim(),10),oneTime=String(r[7]??'').trim(),twoDays=parseInt(String(r[8]??'').trim(),10),twoTime=String(r[9]??'').trim(),qrcode=String(r[11]??'').trim();
+  if(!product||!barcodeBase)continue;
+  rows.push({category,product,barcodeBase:String(barcodeBase).replace(/\D/g,'').padStart(8,'0').slice(0,8),oneDays,oneTime,twoDays,twoTime,qrcode})
+}
+const cats=[...new Set(rows.map(r=>r.category))];
+$('category').innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+updProd();
+$('excelStatus').textContent='已載入';
+$('excelInfo').textContent='共 '+rows.length+' 筆商品';
+stat('Excel 已載入，請選類別、品名、配別。','ok');
+setActiveScanField('barcode');
+dismissSoftKeyboard();
+updateScannerHint('Excel 已載入。預設掃碼目標：條碼；若要掃 Qrcode，請先點 Qrcode 欄位。');
+}catch(err){
+  console.error(err);
+  stat('Excel 讀取失敗。','ng');
+  dismissSoftKeyboard();
+}})
+function updProd(){const cat=$('category').value,rs=rows.filter(r=>r.category===cat);$('product').innerHTML=rs.map(r=>`<option value="${r.product}">${r.product}</option>`).join('');renderExpected()}
+function cur(){const cat=$('category').value,prod=$('product').value;return rows.find(r=>r.category===cat&&r.product===prod)}
+function findByBarcodeBase(base8){return rows.find(r=>r.barcodeBase===base8)||null}
+function inferDeliveryFromCode(dc){return dc==='3'?'一配':(dc==='6'?'二配':'')}
+function renderExpected(){const r=cur(),d=$('delivery').value;if(!r){$('expected').textContent='';return}const days=d==='一配'?r.oneDays:r.twoDays,time=d==='一配'?r.oneTime:r.twoTime,code=d==='一配'?'3':'6',cn=d==='一配'?'橘線':'綠線';$('expected').innerHTML=`類別：${esc(r.category)}｜品名：${esc(r.product)}｜條碼前8碼：${esc(r.barcodeBase)}｜Qrcode：${esc(r.qrcode||'')}｜配別：${esc(d)}（碼=${code}）｜有效天數：${esc(days)}｜有效時間：${esc(time)}｜顏色：${cn}`}
+$('category').addEventListener('change',()=>{updProd();dismissSoftKeyboard();});$('product').addEventListener('change',()=>{renderExpected();dismissSoftKeyboard();});$('delivery').addEventListener('change',()=>{renderExpected();dismissSoftKeyboard();});
+$('openCam').addEventListener('click',async()=>{try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});$('video').style.display='block';$('canvas').style.display='none';$('video').srcObject=stream;lastImageLoaded=false;stat('相機已開啟，請讓條碼靠近紅線，色線落在綠框內。','ok')}catch(err){console.error(err);stat('無法開啟相機。請改用「選擇照片」。','warn')}})
+$('stopCam').addEventListener('click',()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;$('video').srcObject=null;}stat('相機已關閉。','warn')})
+$('scanCam').addEventListener('click',async()=>{const v=$('video');if(!v.videoWidth){stat('相機尚未準備好。若無法開相機，請改用「選擇照片」。','warn');return}const c=$('canvas');c.width=v.videoWidth;c.height=v.videoHeight;const ctx=c.getContext('2d');ctx.drawImage(v,0,0);const crop=document.createElement('canvas');crop.width=Math.round(c.width*0.84);crop.height=Math.round(c.height*0.28);crop.getContext('2d').drawImage(c,Math.round(c.width*0.08),Math.round(c.height*0.36),Math.round(c.width*0.84),Math.round(c.height*0.28),0,0,crop.width,crop.height);const val=await decodeCanvas(crop);const qrVal=await decodeQrCanvas(c);lastColor=detectColor(c);$('video').style.display='none';$('canvas').style.display='block';lastImageLoaded=true;if(val){$('barcodeInput').value=val;setActiveScanField('barcode');}if(qrVal){$('qrcodeInput').value=qrVal;}if(val||qrVal){$('scanStatus').textContent='已掃描';updateScannerHint('已用相機掃到'+(val?'條碼':'')+(val&&qrVal?'與':'')+(qrVal?'Qrcode':'')+'，可直接按開始比對。');stat('已掃描；顏色判斷：'+lastColor.name,'ok')}else{stat('未掃到條碼/Qrcode；顏色判斷：'+lastColor.name,'warn')}})
+$('photoInput').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const img=new Image(),rd=new FileReader();rd.onload=()=>{img.onload=async()=>{const c=$('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);$('video').style.display='none';$('canvas').style.display='block';lastImageLoaded=true;const val=await decodeCanvas(c);const qrVal=await decodeQrCanvas(c);lastColor=detectColor(c);if(val){$('barcodeInput').value=val;setActiveScanField('barcode');}if(qrVal){$('qrcodeInput').value=qrVal;}if(val||qrVal){$('scanStatus').textContent='已掃描';updateScannerHint('已由照片掃到'+(val?'條碼':'')+(val&&qrVal?'與':'')+(qrVal?'Qrcode':'')+'，可直接按開始比對。');stat('已載入照片並掃描成功；顏色判斷：'+lastColor.name,'ok')}else{stat('已載入照片，但未掃到條碼/Qrcode；顏色判斷：'+lastColor.name,'warn')}};img.src=rd.result};rd.readAsDataURL(f)})
+$('analyze').addEventListener('click',()=>{
+if(!rows.length){stat('請先載入 Excel 主檔。','warn');return}
+
+const selected=cur();
+if(!selected){stat('請先選類別與品名。','warn');return}
+
+const barcode=String($('barcodeInput').value||'').replace(/\D/g,''),qrcode=String($('qrcodeInput').value||'').trim();
+if(barcode.length<12 && !qrcode){stat('請至少輸入或掃描條碼、或輸入Qrcode其中一項。','warn');big('待檢核','idle');return}
+
+const base8=barcode.slice(0,8),doy=barcode.slice(8,11),dc=barcode.slice(11,12),matched=(barcode.length>=8?findByBarcodeBase(base8):selected);
+if(!matched){
+  $('tbody').innerHTML=`<tr><td>品名(條碼反查)</td><td class='mono'>(未找到)</td><td class='mono'>由條碼前8碼反查</td><td>❌</td></tr>`;
+  $('detail').innerHTML='【條碼全文】 '+esc(barcode||'(未提供)')+'<br>【Qrcode全文】 '+esc(qrcode||'(未提供)')+'<br>【前8碼商品條碼】 '+esc(base8||'(未提供)')+'<br>【結果】 '+(barcode?'主檔中找不到此條碼對應的商品':'未選擇品名且無法由條碼反查商品');
+  stat('❌ NG：'+(barcode?'主檔中找不到此條碼對應的商品。':'請先選品名，或提供可反查的條碼。'),'ng');
+  big('NG','ng');
+  focusBarcodeInput();
+  updateScannerHint('可直接掃下一張條碼，或使用相機重新掃描。');
+  return;
+}
+
+const inferredDelivery=inferDeliveryFromCode(dc),
+      sdd=dc==='3'?matched.oneDays:(dc==='6'?matched.twoDays:null),
+      sdt=dc==='3'?matched.oneTime:(dc==='6'?matched.twoTime:''),
+      sc=dc==='3'?'橘線':(dc==='6'?'綠線':'未檢查'),
+      expDate=barcode.length>=11?doyDate(doy):'',
+      mfgDate=expDate&&Number.isFinite(sdd)?minusDays(expDate,sdd):'',
+      cr=lastColor||{name:'未檢查',rgb:'-',orangeHits:0,greenHits:0},
+      qrcodeExpected=matched.qrcode||'',
+      selectedInfo=selected.product+' / '+$('delivery').value,
+      matchedInfo=matched.product+' / '+(inferredDelivery||'(未知)');
+
+const res=[
+  {label:'品名(條碼反查)',value:matched.product,expected:'由條碼前8碼反查',ok:true},
+  {label:'條碼',value:barcode||'(未提供)',expected:barcode?(matched.barcodeBase+doy+dc+'X'):'可不提供',ok:barcode?((barcode.length===13)&&!!matched):true},
+  {label:'Qrcode',value:qrcode,expected:qrcodeExpected||'',ok:!qrcodeExpected?true:(normQr(qrcode)===normQr(qrcodeExpected))},
+  {label:'製造日期',value:mfgDate||'(未提供條碼，無法回推)',expected:expDate&&Number.isFinite(sdd)?('由有效日期 '+expDate+' 回推 '+sdd+' 天'):'需有條碼才可回推',ok:barcode? (!!mfgDate&&Number.isFinite(sdd)) : true},
+  {label:'有效日期',value:expDate||'(未提供條碼，無法推算)',expected:'由條碼第9-11碼太陽日（2026年）推算',ok:barcode? !!expDate : true},
+  {label:'有效時間',value:sdt||'(無法判定)',expected:sdt||'-',ok:barcode? !!sdt : true},
+  {label:'配別(條碼反查)',value:inferredDelivery||'(無法判定)',expected:'由條碼第12碼判斷',ok:barcode? (dc==='3'||dc==='6') : true},
+  {label:'顏色配別',value:cr.name,expected:sc,ok:cr.name==='未檢查'?true:(sc==='未檢查'?true:(cr.name===sc))},
+  {label:'手動選取一致性',value:selectedInfo,expected:matchedInfo,ok:barcode?((selected.barcodeBase===matched.barcodeBase)&&($('delivery').value===inferredDelivery)):true}
+];
+
+$('tbody').innerHTML=res.map(r=>`<tr><td>${esc(r.label)}</td><td class='mono'>${esc(r.value||'(未取得)')}</td><td class='mono'>${esc(r.expected||'-')}</td><td>${r.ok?'✅':'❌'}</td></tr>`).join('');
+
+$('detail').innerHTML=
+'【條碼全文】 '+esc(barcode||'(未提供)')+
+'<br>【Qrcode全文】 '+esc(qrcode||'(未取得)')+
+'<br>【前8碼商品條碼】 '+esc(base8||'(未提供)')+
+'<br>【條碼反查品名】 '+esc(matched.product)+
+'<br>【條碼反查配別】 '+esc(inferredDelivery||'(無法判定)')+
+'<br>【第9-11碼太陽日】 '+esc(doy||'(未提供)')+
+'<br>【2026有效日期】 '+esc(expDate||'(未提供條碼，無法推算)')+
+'<br>【回推製造日期】 '+esc(mfgDate||'(未提供條碼，無法回推)')+
+'<br>【有效時間】 '+esc(sdt||'(無法判定)')+
+'<br>【手動選取】 '+esc(selectedInfo)+
+'<br>【條碼反查標準】 '+esc(matchedInfo)+
+'<br>【顏色判斷】 '+esc(cr.name)+' ('+esc(cr.rgb)+')'+
+'<br>【顏色命中】 橘='+esc(cr.orangeHits)+' / 綠='+esc(cr.greenHits);
+
+const failed=res.filter(x=>!x.ok).map(x=>x.label);
+addExportRow({
+  time:new Date().toLocaleString(),
+  category:matched.category,
+  product:matched.product,
+  delivery:inferredDelivery||$('delivery').value,
+  barcode:barcode,
+  qrcode:qrcode,
+  barcode_base8:base8,
+  barcode_doy:doy,
+  barcode_delivery_code:dc,
+  exp_date:expDate,
+  mfg_date:mfgDate,
+  actual_time:sdt,
+  expected_time:sdt,
+  color_name:cr.name,
+  color_rgb:cr.rgb,
+  orange_hits:cr.orangeHits,
+  green_hits:cr.greenHits,
+  result:failed.length?('NG：'+failed.join('、')):'OK'
+});
+if(failed.length){stat('❌ NG：'+failed.join('、'),'ng');big('NG','ng')}else{stat('✅ OK','ok');big('OK','ok')}
+focusBarcodeInput();updateScannerHint('可直接掃下一張條碼，或使用相機重新掃描。')
+})
+</script></body></html>
